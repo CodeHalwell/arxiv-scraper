@@ -1,54 +1,85 @@
-import requests
-import json
-import openai
-import csv
+#!/usr/bin/env python3
+"""
+Original scrape_arxiv.py - Backward compatibility version.
+
+This file maintains the original function-based interface while using
+the new modular structure under the hood.
+"""
+
+# Backward compatibility imports - keep original function names
+from main import ArxivScraperApp
+from arxiv_scraper.config.settings import Settings
+
 
 def fetch_arxiv_papers(query="generative AI", max_results=5):
-    url = f"http://export.arxiv.org/api/query?search_query=all:{query}&start=0&max_results={max_results}"
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise Exception("Failed to fetch data from arxiv")
-    return response.text
+    """Original function signature maintained for backward compatibility."""
+    app = ArxivScraperApp()
+    papers = app.scraper.fetch_papers(query=query, max_results=max_results)
+    
+    # Convert to original dict format for backward compatibility
+    return [{
+        "title": paper.title,
+        "authors": paper.authors,
+        "abstract": paper.abstract,
+        "published": paper.published
+    } for paper in papers]
+
 
 def parse_arxiv_response(response):
-    papers = []
-    entries = response.split("<entry>")
-    for entry in entries[1:]:
-        title = entry.split("<title>")[1].split("</title>")[0].strip()
-        authors = [author.split("</name>")[0].strip() for author in entry.split("<author>")[1:]]
-        abstract = entry.split("<summary>")[1].split("</summary>")[0].strip()
-        published = entry.split("<published>")[1].split("</published>")[0].strip()
-        papers.append({
-            "title": title,
-            "authors": authors,
-            "abstract": abstract,
-            "published": published
-        })
-    return papers
+    """
+    Deprecated: This function is kept for backward compatibility only.
+    The parsing is now handled internally by ArxivScraper.
+    """
+    print("Warning: parse_arxiv_response is deprecated. Use ArxivScraper class instead.")
+    # For compatibility, we'll return the response as-is
+    # In real usage, this would be handled by the new scraper
+    return response
+
 
 def summarize_abstract(abstract):
-    openai.api_key = "YOUR_OPENAI_API_KEY"
-    response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=f"Summarize the following abstract:\n\n{abstract}",
-        max_tokens=150
-    )
-    summary = response.choices[0].text.strip()
-    return summary
+    """Original function signature maintained for backward compatibility."""
+    app = ArxivScraperApp()
+    return app.summarizer.generate_summary(abstract)
+
 
 def save_to_csv(papers, filename="summarized_papers.csv"):
-    keys = papers[0].keys()
-    with open(filename, 'w', newline='') as output_file:
-        dict_writer = csv.DictWriter(output_file, fieldnames=keys)
-        dict_writer.writeheader()
-        dict_writer.writerows(papers)
+    """Original function signature maintained for backward compatibility."""
+    from arxiv_scraper.services.file_manager import FileManager
+    from arxiv_scraper.models.paper import Paper
+    
+    # Convert dict papers back to Paper objects
+    paper_objects = []
+    for paper_dict in papers:
+        # Handle both old and new formats
+        authors = paper_dict["authors"]
+        if isinstance(authors, str):
+            # If authors is already a string (semicolon-separated), split it
+            authors = [a.strip() for a in authors.split(";")]
+        
+        paper_obj = Paper(
+            title=paper_dict["title"],
+            authors=authors,
+            abstract=paper_dict["abstract"],
+            published=paper_dict["published"],
+            summary=paper_dict.get("summary")
+        )
+        paper_objects.append(paper_obj)
+    
+    file_manager = FileManager(output_dir=".")  # Save in current directory like original
+    return file_manager.save_to_csv(paper_objects, filename)
+
 
 def main():
-    response = fetch_arxiv_papers()
-    papers = parse_arxiv_response(response)
-    for paper in papers:
-        paper["summary"] = summarize_abstract(paper["abstract"])
-    save_to_csv(papers)
+    """Main function - updated to use new modular structure."""
+    try:
+        app = ArxivScraperApp()
+        output_path = app.run()
+        print(f"Complete! Results saved to: {output_path}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+
 
 if __name__ == "__main__":
     main()
